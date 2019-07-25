@@ -1,0 +1,8 @@
+# system
+.DS_Store
+Thumbs.db
+
+# app
+/node_modules
+/dist
+*.log

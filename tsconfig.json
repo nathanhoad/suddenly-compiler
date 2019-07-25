@@ -1,0 +1,8 @@
+{
+  "exclude": ["dist", "node_modules", "**/*.test.*", "src/server"],
+  "compilerOptions": {
+    "outDir": "dist",
+    "noImplicitAny": true,
+    "declaration": true
+  }
+}
