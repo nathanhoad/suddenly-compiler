@@ -9,6 +9,8 @@ import Chalk from 'chalk';
 import * as execa from 'execa';
 import { getWebpackConfig, loadServer, guessServerPath, guessCompiledPath } from './util';
 
+export { getWebpackConfig } from './util';
+
 export interface CompilerOptions {
   isLoggingEnabled?: boolean;
 }
