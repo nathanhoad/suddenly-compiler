@@ -1,67 +1,56 @@
 import * as Path from 'path';
-import * as webpack from 'webpack';
-import * as WebpackDevServer from 'webpack-dev-server';
 import * as enableDestroy from 'server-destroy';
 import * as guessRootPath from 'guess-root-path';
 import * as FS from 'fs-extra';
 import { Application } from 'express';
 import Chalk from 'chalk';
 import * as execa from 'execa';
-import { getWebpackConfig, loadServer, guessServerPath, guessCompiledPath } from './util';
+import * as Bundler from 'parcel-bundler';
+import { CompilerOptions, DEFAULT_COMPILER_OPTIONS, loadServer, guessServerPath, guessCompiledPath } from './util';
 
-export { getWebpackConfig } from './util';
+// Need to keep a reference to the bundler to gracefully stop it
+let bundler: any;
 
-export interface CompilerOptions {
-  isLoggingEnabled?: boolean;
-}
-
-const DEFAULT_COMPILER_OPTIONS = {
-  isLoggingEnabled: true
-};
-
-let OPTIONS: CompilerOptions;
-
-/**
- * Configure the compiler
- * @param options the compiler options
- */
-export function initialize(options: CompilerOptions): void {
-  OPTIONS = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
+async function gracefullyExit() {
+  if (bundler) {
+    await bundler.stop();
+  }
+  process.exit();
 }
 
 /**
  * Clean the output folder
+ * @param options compiler options
  */
-export async function clean(): Promise<any> {
+export async function clean(options: CompilerOptions = {}): Promise<any> {
+  options = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
+
   const startedCleaningAt = new Date();
 
-  const rootPath = guessRootPath();
-  const config = getWebpackConfig({ isLoggingEnabled: false });
-
-  // Remove client files
-  await FS.remove(Path.join(rootPath, config.output.path.replace(rootPath, '')));
-
-  // Remove server files
+  // Remove output
   const compiledPath = guessCompiledPath({ isLoggingEnabled: false });
-
+  const outputDirectory = compiledPath.replace(guessRootPath(), '');
   if (!compiledPath.includes('/src')) {
     await FS.remove(compiledPath);
-  }
 
-  if (OPTIONS.isLoggingEnabled) {
-    const time = ((new Date().getTime() - startedCleaningAt.getTime()) / 1000).toFixed(2);
-    console.log(`  ${Chalk.yellow('•')} Cleaned output directory ${Chalk.gray(time + 's')}`);
+    if (options.isLoggingEnabled) {
+      const time = ((new Date().getTime() - startedCleaningAt.getTime()) / 1000).toFixed(2);
+      console.log(`  ${Chalk.yellow('•')} Deleted ${Chalk.bold(outputDirectory)} directory ${Chalk.gray(time + 's')}`);
+    }
   }
 }
 
 /**
  * Compile the server and set up a watch
+ * @param options compiler options
  */
-export function compileServer(): Promise<any> {
+export function compileServer(options: CompilerOptions = {}): Promise<any> {
+  options = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
+
   const startedCompilingAt = new Date();
   return execa('tsc')
     .then(() => {
-      if (OPTIONS.isLoggingEnabled) {
+      if (options.isLoggingEnabled) {
         const time = ((new Date().getTime() - startedCompilingAt.getTime()) / 1000).toFixed(2);
         console.log(`  ${Chalk.yellow('•')} Compiled server ${Chalk.gray(time + 's')}`);
       }
@@ -74,75 +63,137 @@ export function compileServer(): Promise<any> {
     .catch(err => {
       console.log(`  ${Chalk.red('• There was a problem compiling the server')}\n`);
       console.error(err);
-      process.exit();
+      gracefullyExit();
     });
 }
 
 /**
  * Compile the client
+ * @param options compiler options
  */
-export function compileClient(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const config = getWebpackConfig({ isLoggingEnabled: OPTIONS.isLoggingEnabled });
-    const compiler = webpack(config);
-    compiler.run((err, stats) => {
-      if (err) return reject(err);
+export function compileClient(options: CompilerOptions = {}): Promise<any> {
+  options = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
 
-      const output: any = stats.toJson();
-      if (output.errors.length === 0) {
-        if (OPTIONS.isLoggingEnabled) {
-          console.log(`  ${Chalk.yellow('•')} Compiled client ${Chalk.gray((output.time / 1000).toFixed(2) + 's')}`);
-        }
-        resolve(output);
-      } else {
-        if (OPTIONS.isLoggingEnabled) {
-          console.log(`  ${Chalk.red('• There was a problem compiling the client')}`);
-          console.error(output.errors.join('\n'));
-          process.exit();
-        } else {
-          return reject(new Error(output.errors.join('\n')));
-        }
-      }
-    });
+  let isFirstBuild = true;
+  let startedCompilingAt = new Date();
+
+  const compiledPath = guessCompiledPath({ isLoggingEnabled: false });
+  const tempPath = Path.join(options.rootPath, '.cache', 'client.html');
+  const relativeScriptPath = Path.relative(Path.dirname(tempPath), Path.join(options.rootPath, options.clientIndex));
+
+  // Make a temp HTML file to house our bundled script reference
+  // Down further it will be injected into the actual HTML view
+  FS.writeFileSync(tempPath, `<script src="${relativeScriptPath}"></script>`);
+
+  let lastProblemAt: Date = null;
+  bundler = new Bundler(tempPath, {
+    watch: true,
+    logLevel: 0,
+    outDir: Path.join(compiledPath, 'public'),
+    outFile: 'client.html',
+    publicUrl: '/assets/'
   });
+
+  // Apply any plugins or whatever
+  options.onBeforeBundle(bundler);
+
+  bundler.on('buildStart', (entryPoints: any[]) => {
+    startedCompilingAt = new Date();
+  });
+  bundler.on('bundled', (bundle: any) => {
+    if (lastProblemAt !== null) {
+      console.log(Chalk.greenBright('\n  • Looks like the problem is fixed now'));
+      lastProblemAt = null;
+    }
+
+    if (bundle.entryAsset) {
+      // Work out where to compile our full HTML template
+      let viewsPath = Path.join(options.rootPath, 'src', 'server', 'views');
+      try {
+        viewsPath = loadServer({ isLoggingEnabled: false })
+          .get('views')
+          .find((v: any) => v.includes('src'));
+      } catch (e) {
+        // Do nothing
+      }
+
+      // Inject the bundled script tag into the actual HTML view
+      let htmlContent = FS.readFileSync(Path.join(viewsPath, 'index.html.ejs'), 'utf8');
+      htmlContent = htmlContent.replace('</body>', `${bundle.entryAsset.generated.html}</body>`);
+
+      // Find all of the locals in the template and replace them with
+      // definition checks
+      htmlContent.match(/\<\%\= (.*) \%\>/g).forEach(match => {
+        const word = match.match(/\<\%\= (.*) \%\>/)[1];
+        htmlContent = htmlContent.replace(match, `<% if (typeof ${word} !== "undefined") { %>${match}<% } %>`);
+      });
+
+      FS.writeFileSync(Path.join(compiledPath, 'public', 'index.html.ejs'), htmlContent);
+
+      if (isFirstBuild) {
+        isFirstBuild = false;
+        const time = ((new Date().getTime() - startedCompilingAt.getTime()) / 1000).toFixed(2);
+        console.log(`  ${Chalk.yellow('•')} Compiled client ${Chalk.gray(time + 's')}`);
+      }
+    }
+  });
+  bundler.on('buildError', (error: any) => {
+    lastProblemAt = new Date();
+    console.log(`  ${Chalk.red('• There was a problem compiling the client')}\n`);
+    if (error.highlightedCodeFrame) {
+      console.error(error.fileName);
+      console.error(error.highlightedCodeFrame);
+    } else {
+      console.error(error);
+    }
+
+    if (isFirstBuild) {
+      console.log(`\n 💥  ${Chalk.bold.yellow('Try again once the problem is resolved.')}\n`);
+      gracefullyExit();
+    }
+  });
+
+  return bundler.bundle();
 }
 
 /**
  * Run the server and an asset server for Webpack output
+ * @param options compiler options
  */
-export function run(): Promise<any> {
+export function run(options: CompilerOptions = {}): Promise<any> {
+  options = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
+
   return new Promise((resolve, reject) => {
     process.on('uncaughtException', err => {
       console.error(err);
+      gracefullyExit();
     });
 
     // Handle Ctrl+C gracefully
     process.stdin.setRawMode(true);
-    process.stdin.on('data', d => {
+    process.stdin.on('data', async d => {
       if (d[0] == 3 || d.toString() === 'q') {
         console.log(`\n 🛰  Server stoppped.\n`);
-        process.exit();
+        gracefullyExit();
       }
     });
 
     const serverPath = guessServerPath();
     let server: Application = loadServer();
     let listener: any;
-
-    const config = getWebpackConfig({ isLoggingEnabled: OPTIONS.isLoggingEnabled });
-    let compiler = webpack(config);
-
     let lastProblemAt: Date = null;
     if (process.env.NODE_ENV !== 'production') {
-      FS.watch(serverPath, { recursive: true }, async e => {
+      FS.watch(serverPath, { recursive: true }, async (e, filename) => {
+        if (filename.match(/^public\//)) return;
+
         // Purge all connections on the current server
         listener.destroy();
 
         // Load in file changes
         try {
-          server = loadServer({ isLoggingEnabled: OPTIONS.isLoggingEnabled });
+          server = loadServer(options);
           listener = server.listen(process.env.PORT || 5000, () => {
-            if (lastProblemAt !== null && OPTIONS.isLoggingEnabled) {
+            if (lastProblemAt !== null && options.isLoggingEnabled) {
               console.log(Chalk.greenBright('\n  • Looks like the problem is fixed now'));
               console.log(
                 `\n 🚀  Running again at ${Chalk.bold(
@@ -159,30 +210,17 @@ export function run(): Promise<any> {
         }
       });
 
-      // Run the asset server
-      const assetServer = new WebpackDevServer(compiler, {
-        contentBase: config.output.path,
-        publicPath: config.output.publicPath,
-        noInfo: true,
-        quiet: true,
-        headers: {
-          'Access-Control-Allow-Origin': '*'
+      // Run the server
+      listener = server.listen(process.env.PORT || 5000, () => {
+        if (options.isLoggingEnabled) {
+          console.log(
+            `\n 🚀  Running at ${Chalk.bold(`http://localhost:${process.env.PORT || 5000}`)}\n    ${Chalk.gray(
+              'Press Ctrl+c or q to quit'
+            )}\n`
+          );
         }
       });
-      assetServer.listen(5050, 'localhost', err => {
-        if (err) return reject(err);
-
-        listener = server.listen(process.env.PORT || 5000, () => {
-          if (OPTIONS.isLoggingEnabled) {
-            console.log(
-              `\n 🚀  Running at ${Chalk.bold(`http://localhost:${process.env.PORT || 5000}`)}\n    ${Chalk.gray(
-                'Press Ctrl+c or q to quit'
-              )}\n`
-            );
-          }
-        });
-        enableDestroy(listener);
-      });
+      enableDestroy(listener);
     }
   });
 }
@@ -192,9 +230,10 @@ export function run(): Promise<any> {
  * @param options any compiler options to initialize
  */
 export async function compile(options: CompilerOptions = {}): Promise<any> {
-  initialize(options);
-  await compileServer();
-  await compileClient(); // Webpack config depends on server views config
+  options = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
+
+  compileClient(options);
+  await compileServer(options);
 }
 
 /**
@@ -202,10 +241,11 @@ export async function compile(options: CompilerOptions = {}): Promise<any> {
  * @param options any compiler options to initialize
  */
 export async function compileAndRun(options: CompilerOptions = {}) {
-  initialize(options);
+  options = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
+
   try {
     // Blank line above output
-    if (OPTIONS.isLoggingEnabled) console.log('');
+    if (options.isLoggingEnabled) console.log('');
 
     // Don't clean production; some caches might point to
     // slightly older files
@@ -213,11 +253,11 @@ export async function compileAndRun(options: CompilerOptions = {}) {
       await clean();
     }
 
-    await compile();
-    await run();
+    await compile(options);
+    await run(options);
   } catch (e) {
-    if (OPTIONS.isLoggingEnabled) console.error(e);
-    process.exit();
+    if (options.isLoggingEnabled) console.error(e);
+    gracefullyExit();
   }
 }
 

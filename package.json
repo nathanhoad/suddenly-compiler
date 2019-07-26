@@ -14,7 +14,7 @@
   "keywords": [
     "typescript",
     "express",
-    "webpack"
+    "parcel"
   ],
   "author": "Nathan Hoad <nathan@nathanhoad.net>",
   "license": "ISC",
@@ -28,18 +28,14 @@
     "execa": "^2.0.3",
     "fs-extra": "^8.1.0",
     "guess-root-path": "^1.0.0",
-    "html-webpack-plugin": "^3.2.0",
+    "parcel-bundler": "^1.12.3",
     "server-destroy": "^1.0.1",
-    "ts-loader": "^6.0.4",
-    "webpack": "^4.37.0",
-    "webpack-dev-server": "^3.7.2"
+    "ts-loader": "^6.0.4"
   },
   "devDependencies": {
     "@types/express": "^4.17.0",
     "@types/fs-extra": "^8.0.0",
     "@types/jest": "^24.0.15",
-    "@types/webpack": "^4.32.1",
-    "@types/webpack-dev-server": "^3.1.7",
     "express": "^4.17.1",
     "jest": "^24.8.0",
     "ts-jest": "^24.0.2",

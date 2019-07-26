@@ -1,16 +1,7 @@
-import { getWebpackConfig, guessCompiledPath, guessServerPath, loadServer } from './util';
+import { guessCompiledPath, guessServerPath, loadServer } from './util';
 import * as Path from 'path';
 
 describe('Util', () => {
-  it('can generate a webpack config', () => {
-    let config = getWebpackConfig({ isLoggingEnabled: false });
-
-    expect(config).toHaveProperty('entry');
-    expect(config).toHaveProperty('output');
-    expect(config).toHaveProperty('module');
-    expect(config).toHaveProperty('plugins');
-  });
-
   it('can guess the compiled path', () => {
     let path = guessCompiledPath({ isLoggingEnabled: false });
 
@@ -30,7 +21,7 @@ describe('Util', () => {
       }).toThrow();
     });
 
-    it('files if the server will not listen', () => {
+    it('fails if the server will not listen', () => {
       expect(() => {
         loadServer({ isLoggingEnabled: false, rootPath: Path.join(__dirname, 'test', 'bogus-server') });
       }).toThrowError(/listen/);

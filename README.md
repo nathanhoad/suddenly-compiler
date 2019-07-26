@@ -6,29 +6,22 @@ The compiler assumes you're using TypeScript and have set `"main"` in your `pack
 
 ## Usage
 
-By default the compiler will use it's own Webpack config.
-
-You can extend it by creating a `webpack.config.js`:
-
-```js
-const { getWebpackConfig } = require('@suddenly/compiler');
-
-const config = getWebpackConfig();
-
-config.module.rules.push({
-  test: /\.blah$/,
-  use: 'blah-loader',
-  exclude: '/node_modules/'
-});
-
-module.exports = config;
-```
-
 An example `build` script:
 
 ```js
 #!/usr/bin/env node
 require('@suddenly/compiler').compileAndRun();
+```
+
+You can also hook in to the `parcel-bundler` instance before the client compilation happens:
+
+```js
+#!/usr/bin/env node
+require('@suddenly/compiler').compileAndRun({
+  onBeforeBundle(bundler) {
+    bundler.addPackager('foo', require.resolve('./MyPackager'));
+  }
+});
 ```
 
 ## Contributors
