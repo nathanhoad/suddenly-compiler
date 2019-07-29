@@ -81,6 +81,8 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
   const tempPath = Path.join(options.rootPath, '.cache', 'client.html');
   const relativeScriptPath = Path.relative(Path.dirname(tempPath), Path.join(options.rootPath, options.clientIndex));
 
+  FS.ensureDirSync(Path.dirname(tempPath));
+
   // Make a temp HTML file to house our bundled script reference
   // Down further it will be injected into the actual HTML view
   FS.writeFileSync(tempPath, `<script src="${relativeScriptPath}"></script>`);
