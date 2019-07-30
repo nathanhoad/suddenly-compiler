@@ -79,13 +79,27 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
 
   const compiledPath = guessCompiledPath({ isLoggingEnabled: false });
   const tempPath = Path.join(options.rootPath, '.cache', 'client.html');
-  const relativeScriptPath = Path.relative(Path.dirname(tempPath), Path.join(options.rootPath, options.clientIndex));
 
   FS.ensureDirSync(Path.dirname(tempPath));
 
+  let tempTemplateBits = [];
+
+  const scriptsPath = Path.join(options.rootPath, options.clientIndex);
+  if (FS.existsSync(scriptsPath)) {
+    const relativeScriptPath = Path.relative(Path.dirname(tempPath), scriptsPath);
+    tempTemplateBits.push(`<script src="${relativeScriptPath}"></script>`);
+  }
+
+  const stylesPath = Path.join(options.rootPath, options.stylesIndex);
+  if (FS.existsSync(stylesPath)) {
+    const relativeStylesPath = Path.relative(Path.dirname(tempPath), stylesPath);
+    tempTemplateBits.push(`<link rel="stylesheet" type="text/css" href="${relativeStylesPath}">`);
+  }
+
   // Make a temp HTML file to house our bundled script reference
   // Down further it will be injected into the actual HTML view
-  FS.writeFileSync(tempPath, `<script src="${relativeScriptPath}"></script>`);
+  const GENERATED_DELIMITER = '||||';
+  FS.writeFileSync(tempPath, tempTemplateBits.join(GENERATED_DELIMITER));
 
   let lastProblemAt: Date = null;
   bundler = new Bundler(tempPath, {
@@ -121,7 +135,13 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
 
       // Inject the bundled script tag into the actual HTML view
       let htmlContent = FS.readFileSync(Path.join(viewsPath, 'index.html.ejs'), 'utf8');
-      htmlContent = htmlContent.replace('</body>', `${bundle.entryAsset.generated.html}</body>`);
+      const [scriptContent, stylesContent] = bundle.entryAsset.generated.html.split(GENERATED_DELIMITER);
+      if (stylesContent) {
+        htmlContent = htmlContent.replace('</head>', `${stylesContent}</head>`);
+      }
+      if (scriptContent) {
+        htmlContent = htmlContent.replace('</body>', `${scriptContent}</body>`);
+      }
 
       // Find all of the locals in the template and replace them with
       // definition checks

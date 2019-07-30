@@ -29,6 +29,7 @@
     "fs-extra": "^8.1.0",
     "guess-root-path": "^1.0.0",
     "parcel-bundler": "^1.12.3",
+    "sass": "^1.22.9",
     "server-destroy": "^1.0.1",
     "ts-loader": "^6.0.4"
   },

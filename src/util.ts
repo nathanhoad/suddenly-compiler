@@ -10,6 +10,7 @@ export interface CompilerOptions {
   isLoggingEnabled?: boolean;
   rootPath?: string;
   clientIndex?: string;
+  stylesIndex?: string;
   onBeforeBundle?: (bundler: any) => void;
 }
 
@@ -17,6 +18,7 @@ export const DEFAULT_COMPILER_OPTIONS: CompilerOptions = {
   isLoggingEnabled: true,
   rootPath: guessRootPath(),
   clientIndex: 'src/client/index.tsx',
+  stylesIndex: 'src/client/styles.scss',
   onBeforeBundle: b => {}
 };
 
