@@ -103,7 +103,7 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
 
   let lastProblemAt: Date = null;
   bundler = new Bundler(tempPath, {
-    watch: true,
+    watch: process.env.NODE_ENV === 'development',
     logLevel: 0,
     outDir: Path.join(compiledPath, 'public'),
     outFile: 'client.html',
