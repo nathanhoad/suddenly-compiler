@@ -1,6 +1,6 @@
 {
   "name": "@suddenly/compiler",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "A compiler/runner for @suddenly/server apps",
   "main": "dist/index.js",
   "scripts": {
