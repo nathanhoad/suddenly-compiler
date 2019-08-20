@@ -47,21 +47,28 @@ export async function clean(options: CompilerOptions = {}): Promise<any> {
 export function compileServer(options: CompilerOptions = {}): Promise<any> {
   options = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
 
+  // Try and guess what we are actually building
+  let thing = 'server';
+  const packageContents = FS.readFileSync(Path.join(options.rootPath, 'package.json'), 'utf8');
+  if (packageContents.toLowerCase().includes('electron')) {
+    thing = 'application';
+  }
+
   const startedCompilingAt = new Date();
   return execa('tsc')
     .then(() => {
       if (options.isLoggingEnabled) {
         const time = ((new Date().getTime() - startedCompilingAt.getTime()) / 1000).toFixed(2);
-        console.log(`  ${Chalk.yellow('•')} Compiled server ${Chalk.gray(time + 's')}`);
+        console.log(`  ${Chalk.yellow('•')} Compiled ${thing} ${Chalk.gray(time + 's')}`);
       }
 
       // Set up a watch for server changes
-      if (process.env.NODE_ENV !== 'production') {
+      if (thing === 'server' && process.env.NODE_ENV !== 'production') {
         execa('tsc', ['-w']);
       }
     })
     .catch(err => {
-      console.log(`  ${Chalk.red('• There was a problem compiling the server')}\n`);
+      console.log(`  ${Chalk.red(`• There was a problem compiling the ${thing}`)}\n`);
       console.error(err);
       gracefullyExit();
     });
