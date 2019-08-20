@@ -128,13 +128,15 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
       if (options.templateFile) {
         templateFile = Path.join(options.rootPath, options.templateFile);
       } else {
+        let viewsPath;
         try {
-          templateFile = loadServer({ isLoggingEnabled: false })
+          viewsPath = loadServer({ isLoggingEnabled: false })
             .get('views')
             .find((v: any) => v.includes('src'));
         } catch (e) {
-          templateFile = Path.join(options.rootPath, 'src', 'server', 'views');
+          viewsPath = Path.join(options.rootPath, 'src', 'server', 'views');
         }
+        templateFile = Path.join(viewsPath, 'index.html.ejs');
       }
 
       // If we can't find a template then just use the built in one
