@@ -10,6 +10,7 @@ export interface CompilerOptions {
   isLoggingEnabled?: boolean;
   rootPath?: string;
   clientIndex?: string;
+  templateFile?: string;
   stylesIndex?: string;
   onBeforeBundle?: (bundler: any) => void;
 }

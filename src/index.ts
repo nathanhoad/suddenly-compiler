@@ -124,17 +124,26 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
 
     if (bundle.entryAsset) {
       // Work out where to compile our full HTML template
-      let viewsPath = Path.join(options.rootPath, 'src', 'server', 'views');
-      try {
-        viewsPath = loadServer({ isLoggingEnabled: false })
-          .get('views')
-          .find((v: any) => v.includes('src'));
-      } catch (e) {
-        // Do nothing
+      let templateFile = '';
+      if (options.templateFile) {
+        templateFile = Path.join(options.rootPath, options.templateFile);
+      } else {
+        try {
+          templateFile = loadServer({ isLoggingEnabled: false })
+            .get('views')
+            .find((v: any) => v.includes('src'));
+        } catch (e) {
+          templateFile = Path.join(options.rootPath, 'src', 'server', 'views');
+        }
+      }
+
+      // If we can't find a template then just use the built in one
+      if (!FS.existsSync(templateFile)) {
+        templateFile = Path.join(__dirname, '..', 'template.html.ejs');
       }
 
       // Inject the bundled script tag into the actual HTML view
-      let htmlContent = FS.readFileSync(Path.join(viewsPath, 'index.html.ejs'), 'utf8');
+      let htmlContent = FS.readFileSync(templateFile, 'utf8');
       const [scriptContent, stylesContent] = bundle.entryAsset.generated.html.split(GENERATED_DELIMITER);
       if (stylesContent) {
         htmlContent = htmlContent.replace('</head>', `${stylesContent}</head>`);
@@ -145,12 +154,12 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
 
       // Find all of the locals in the template and replace them with
       // definition checks
-      htmlContent.match(/\<\%\= (.*) \%\>/g).forEach(match => {
+      (htmlContent.match(/\<\%\= (.*) \%\>/g) || []).forEach(match => {
         const word = match.match(/\<\%\= (.*) \%\>/)[1];
         htmlContent = htmlContent.replace(match, `<% if (typeof ${word} !== "undefined") { %>${match}<% } %>`);
       });
 
-      FS.writeFileSync(Path.join(compiledPath, 'public', 'index.html.ejs'), htmlContent);
+      FS.writeFileSync(Path.join(compiledPath, 'public', Path.basename(templateFile)), htmlContent);
 
       if (isFirstBuild) {
         isFirstBuild = false;
