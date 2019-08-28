@@ -9,6 +9,7 @@ import Chalk from 'chalk';
 export interface CompilerOptions {
   isLoggingEnabled?: boolean;
   rootPath?: string;
+  publicPath?: string;
   clientIndex?: string;
   templateFile?: string;
   stylesIndex?: string;
@@ -18,6 +19,7 @@ export interface CompilerOptions {
 export const DEFAULT_COMPILER_OPTIONS: CompilerOptions = {
   isLoggingEnabled: true,
   rootPath: guessRootPath(),
+  publicPath: '/assets/',
   clientIndex: 'src/client/index.tsx',
   stylesIndex: 'src/client/styles.scss',
   onBeforeBundle: b => {}

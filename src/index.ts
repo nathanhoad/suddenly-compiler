@@ -114,7 +114,7 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
     logLevel: 0,
     outDir: Path.join(compiledPath, 'public'),
     outFile: 'client.html',
-    publicUrl: '/assets/'
+    publicUrl: options.publicPath
   });
 
   // Apply any plugins or whatever
