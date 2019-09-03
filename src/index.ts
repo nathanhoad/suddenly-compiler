@@ -197,6 +197,20 @@ export function compileClient(options: CompilerOptions = {}): Promise<any> {
 }
 
 /**
+ * Copy a file or directory. If given a directory it will copy all files but not the directory itself
+ * @param from the source file/directory
+ * @param to the destination
+ * @param options compiler options
+ */
+export function copy(from: string, to: string, options: CompilerOptions = {}): Promise<any> {
+  options = Object.assign({}, DEFAULT_COMPILER_OPTIONS, options);
+  console.log(`  ${Chalk.yellow('•')} Copied ${Chalk.bold(from)} to ${Chalk.bold(to)}`);
+  from = Path.join(options.rootPath, from);
+  to = Path.join(options.rootPath, to);
+  return FS.copy(from, to);
+}
+
+/**
  * Run the server and an asset server for Webpack output
  * @param options compiler options
  */
